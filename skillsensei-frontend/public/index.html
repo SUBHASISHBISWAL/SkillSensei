@@ -83,6 +83,7 @@
             const [resumes, setResumes] = useState([]);
             const [selectedResume, setSelectedResume] = useState(null);
             const [uploadProgress, setUploadProgress] = useState(0);
+            const [uploadPhase, setUploadPhase] = useState(null);
             const [analytics, setAnalytics] = useState(null);
             const [loading, setLoading] = useState(false);
             const [analysis, setAnalysis] = useState(null);
@@ -122,38 +123,53 @@
 
                 setLoading(true);
                 setUploadProgress(0);
+                setUploadPhase('uploading');
 
                 const formData = new FormData();
                 formData.append('file', file);
 
                 try {
-                    const interval = setInterval(() => {
-                        setUploadProgress(prev => Math.min(prev + 10, 90));
-                    }, 200);
+                    const data = await new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', `${API_BASE_URL}/parse-resume/`);
 
-                    const response = await fetch(`${API_BASE_URL}/parse-resume/`, {
-                        method: 'POST',
-                        body: formData,
+                        xhr.upload.onprogress = (e) => {
+                            if (e.lengthComputable) {
+                                setUploadProgress(Math.round((e.loaded / e.total) * 100));
+                            }
+                        };
+
+                        xhr.upload.onload = () => {
+                            setUploadProgress(100);
+                            setUploadPhase('parsing');
+                        };
+
+                        xhr.onload = () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                resolve(JSON.parse(xhr.responseText));
+                            } else {
+                                reject(new Error('Error uploading resume'));
+                            }
+                        };
+
+                        xhr.onerror = () => reject(new Error('Error uploading resume'));
+
+                        xhr.send(formData);
                     });
 
-                    clearInterval(interval);
-                    setUploadProgress(100);
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        setSelectedResume(data);
-                        setTimeout(() => {
-                            setActiveTab('view');
-                        }, 500);
-                    } else {
-                        alert('Error uploading resume');
-                    }
+                    setSelectedResume(data);
+                    setTimeout(() => {
+                        setActiveTab('view');
+                    }, 500);
                 } catch (error) {
                     console.error('Error:', error);
                     alert('Error uploading resume');
                 } finally {
                     setLoading(false);
-                    setTimeout(() => setUploadProgress(0), 1000);
+                    setTimeout(() => {
+                        setUploadProgress(0);
+                        setUploadPhase(null);
+                    }, 1000);
                 }
             };
 
@@ -276,15 +292,21 @@
                                         </div>
                                     </label>
 
-                                    {uploadProgress > 0 && (
+                                    {uploadPhase && (
                                         <div className="mt-8 max-w-md mx-auto">
                                             <div className="bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
-                                                <div
-                                                    className="bg-gradient-to-r from-purple-600 to-pink-600 h-full transition-all duration-300 shadow-lg"
-                                                    style={{ width: `${uploadProgress}%` }}
-                                                />
+                                                {uploadPhase === 'uploading' ? (
+                                                    <div
+                                                        className="bg-gradient-to-r from-purple-600 to-pink-600 h-full transition-all duration-300 shadow-lg"
+                                                        style={{ width: `${uploadProgress}%` }}
+                                                    />
+                                                ) : (
+                                                    <div className="bg-gradient-to-r from-purple-600 to-pink-600 h-full w-full animate-pulse shadow-lg" />
+                                                )}
                                             </div>
-                                            <p className="text-sm text-gray-600 mt-3 font-semibold">{uploadProgress}% Complete</p>
+                                            <p className="text-sm text-gray-600 mt-3 font-semibold">
+                                                {uploadPhase === 'uploading' ? `Uploading... ${uploadProgress}%` : 'AI is parsing your resume...'}
+                                            </p>
                                         </div>
                                     )}
 
