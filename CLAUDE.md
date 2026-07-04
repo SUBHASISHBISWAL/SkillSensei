@@ -14,7 +14,7 @@ SkillSensei is an AI resume parsing/scoring platform. A FastAPI backend parses u
 - `schemas.py` — Pydantic v2 schemas (`from_attributes=True`). Has `field_validator`s that convert DB shapes to API shapes: `skills` list-of-`Skill`-objects → list of names; `technologies` comma-string → list.
 - `crud.py` — `create_or_update_resume` upserts by email (then phone); on update it clears and replaces skills/experience/projects/education. `get_or_create_skill` dedupes skills.
 - `database.py` — SQLite engine (`sqlite:///./resume_parser.db`) and `SessionLocal`/`Base`.
-- `scoring.py` — `ResumeScorer`: skill matching against a fixed `TARGET_SKILLS` list, `textstat` readability. Grammar check is **disabled** (returns a hardcoded 85) because `language_tool_python` needs a Java runtime unavailable on Railway. `overall = skills*0.4 + readability*0.3 + grammar*0.3`.
+- `scoring.py` — `ResumeScorer`: skill matching against a fixed `TARGET_SKILLS` list, `textstat` readability. Grammar check is **disabled** (`check_grammar` returns a hardcoded `(85, [])`) because `language_tool_python` needs a Java runtime unavailable on Railway; the returned `grammar_score`/`grammar_errors` are placeholders and the feedback text says so rather than claiming "Excellent grammar!". `overall_score` is weighted `skills*(4/7) + readability*(3/7)` — grammar is excluded from the weighting since it isn't actually assessed.
 
 **Frontend (`skillsensei-frontend/public/`):**
 - `index.html`, `analysis.html`, `suggestions.html` — standalone pages. React 18 + ReactDOM + Babel Standalone + Tailwind, all loaded from CDN `<script>` tags. JSX is transpiled in-browser by Babel. There is **no `package.json`, no node_modules, no bundler**.
@@ -38,8 +38,7 @@ uvicorn main:app --reload                 # http://127.0.0.1:8000 , docs at /doc
 
 ## Gotchas
 
-- **Duplicate route definitions.** `main.py` defines several paths twice — `GET /resumes/`, `analyze_resume`, and `delete_resume` each appear more than once. With FastAPI, the **last** definition for a given path+method wins. The active `GET /resumes/` is the second one (returns a summary list keyed off `PersonalInfo`), not the `List[ResumeData]` version above it. Check which copy is live before editing.
-- The two delete endpoints use different paths: `DELETE /resumes/{id}` (by id) and `DELETE /resume/{email}` (by email, singular `resume`).
+- There are still two similarly-named pairs of endpoints, kept intentionally: `POST /resumes/{id}/analyze` (`analyze_resume`) vs `POST /analyze-resume/{email}` (`analyze_resume_by_email`), and `DELETE /resumes/{id}` (`delete_resume`) vs `DELETE /resume/{email}` (`delete_resume_by_email`, singular `resume`). The SPA (`index.html`) uses the id-based ones; the standalone report pages (`analysis.html`, `suggestions.html`) use the email-keyed ones. Function names were deduplicated so this is no longer a shadowing risk, just two legitimate paths per feature — don't assume one is dead code.
 - In `get_dashboard_analytics`, `func` is referenced before its `from sqlalchemy import func` import inside the function — touch this endpoint with care.
 - Gemini responses are parsed by stripping ```json fences then `json.loads`; malformed model output raises 500s. `/get-suggestions/{email}` uses `gemini-1.5-flash` while other calls use `gemini-2.5-flash`.
 - No automated tests and no linter config in the repo.

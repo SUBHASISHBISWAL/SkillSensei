@@ -372,7 +372,7 @@
         // Fetch and display analysis
         async function loadAnalysis() {
             try {
-                const response = await fetch(`http://localhost:8000/analyze-resume/${email}`);
+                const response = await fetch(`http://localhost:8000/analyze-resume/${email}`, { method: 'POST' });
 
                 if (!response.ok) {
                     throw new Error('Failed to analyze resume');

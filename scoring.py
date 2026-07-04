@@ -44,15 +44,16 @@ class ResumeScorer:
         grammar_score, grammar_errors = self.check_grammar(resume_text)
         
         skills_score = min(100, len(matched_skills) * 10)
-        final_score = (skills_score * 0.4) + (readability_score * 0.3) + (grammar_score * 0.3)
-        
+        # Grammar check is disabled (see check_grammar), so it's excluded from the
+        # weighted score; skills/readability keep their original 4:3 relative weight.
+        final_score = (skills_score * (4 / 7)) + (readability_score * (3 / 7))
+
         feedback = {
-            "skills": "Great job on listing relevant skills!" if skills_score > 50 
+            "skills": "Great job on listing relevant skills!" if skills_score > 50
                      else f"Consider adding more industry-standard skills.",
-            "readability": "Your resume is easy to read." if readability_score > 60 
+            "readability": "Your resume is easy to read." if readability_score > 60
                           else "Try using shorter sentences and simpler words.",
-            "grammar": "Excellent grammar!" if grammar_score > 80 
-                      else f"Found {len(grammar_errors)} grammar issues."
+            "grammar": "Grammar checking is currently unavailable in this deployment."
         }
         
         return {

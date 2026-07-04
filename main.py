@@ -122,7 +122,8 @@ async def parse_and_save_resume(file: UploadFile = File(...), db: Session = Depe
         raise HTTPException(status_code=400, detail="Could not extract text from the document.")
     
     structured_data = await parse_resume_with_gemini(raw_text)
-    crud.create_or_update_resume(db=db, resume_data=structured_data)
+    db_resume = crud.create_or_update_resume(db=db, resume_data=structured_data)
+    structured_data.id = db_resume.id
     return structured_data
 
 @app.get("/resumes/{resume_id}", response_model=schemas.ResumeData, tags=["Database"])
@@ -214,9 +215,8 @@ async def analyze_resume(resume_id: int, db: Session = Depends(get_db)):
     {' '.join([exp.description or '' for exp in db_resume.work_experiences])}
     """
     
-    scorer = ResumeScorer()
     analysis = scorer.generate_score(resume_text)
-    
+
     # Save score to database
     from datetime import datetime
     existing_score = db.query(models.ResumeScore).filter(
@@ -376,7 +376,7 @@ async def get_dashboard_analytics(db: Session = Depends(get_db)):
         "top_skills": [{"skill": s[0], "count": s[1]} for s in top_skills]
     }
 @app.post("/analyze-resume/{email}")
-async def analyze_resume(email: str, db: Session = Depends(get_db)):
+async def analyze_resume_by_email(email: str, db: Session = Depends(get_db)):
     """
     Analyzes a resume and returns detailed scoring
     """
@@ -529,34 +529,6 @@ async def get_suggestions(email: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ENDPOINT 3: Get All Resumes (for My Resumes page)
-@app.get("/resumes/")
-async def get_all_resumes(db: Session = Depends(get_db)):
-    """
-    Get list of all resumes
-    """
-    try:
-        resumes = db.query(models.PersonalInfo).all()
-        
-        result = []
-        for info in resumes:
-            resume = info.resume
-            result.append({
-                "name": info.name,
-                "email": info.email,
-                "phone": info.phone,
-                "skills_count": len(resume.skills),
-                "projects_count": len(resume.projects),
-                "education": resume.educations[0].institution if resume.educations else None,
-                "has_score": resume.score is not None
-            })
-        
-        return result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # ENDPOINT 4: Get Resume by Email (for View page)
 @app.get("/resume/{email}")
 async def get_resume_by_email(email: str, db: Session = Depends(get_db)):
@@ -619,7 +591,7 @@ async def get_resume_by_email(email: str, db: Session = Depends(get_db)):
 
 # ENDPOINT 5: Delete Resume
 @app.delete("/resume/{email}")
-async def delete_resume(email: str, db: Session = Depends(get_db)):
+async def delete_resume_by_email(email: str, db: Session = Depends(get_db)):
     """
     Delete a resume by email
     """
